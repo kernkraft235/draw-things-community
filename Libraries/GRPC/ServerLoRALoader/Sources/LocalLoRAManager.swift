@@ -46,15 +46,10 @@ public final class LocalLoRAManager {
       key: modelName, session: session, objCResponder: objCResponder
     ) { result in
       switch result {
-      case .success(let tempUrl):
-        logger.info("Downloaded LoRA \(modelName) at \(tempUrl)")
+      case .success(let data):
+        logger.info("Downloaded LoRA \(modelName)")
         do {
           // Get the file size from the downloaded temp file
-          let fileAttributes = try FileManager.default.attributesOfItem(atPath: tempUrl.path)
-          guard let _ = fileAttributes[.size] as? Int64 else {
-            logger.info("Failed to determine size of downloaded file \(modelName)")
-            throw Error.noAttributes
-          }
           // only using the prefix hash as the file name, for example
           // "072ef94e15252e963a0bc77702f8db329ef2ce0e2245ed487ee61aeca1cdb69d_d71b5bbc-0a6b-4b50-8c6f-3691b80bc2ee" --> "072ef94e15252e963a0bc77702f8db329ef2ce0e2245ed487ee61aeca1cdb69d"
           let modelName = modelName.components(separatedBy: "_").first ?? modelName
@@ -66,17 +61,16 @@ public final class LocalLoRAManager {
             withIntermediateDirectories: true
           )
 
-          let fileData = try Data(contentsOf: tempUrl, options: .mappedIfSafe)
-          let hash = SHA256.hash(data: fileData)
+          let hash = SHA256.hash(data: data)
           let sha256 = hash.compactMap { String(format: "%02x", $0) }.joined()
           guard sha256 == modelName else {
             logger.info("Mismatch content hash \(modelName) \(sha256)")
             throw Error.contentHashMismatch
           }
           // Move downloaded file to destination
-          try FileManager.default.moveItem(at: tempUrl, to: destinationUrl)
+          try data.write(to: destinationUrl, options: .atomic)
           logger.info(
-            "Successfully moved model \(modelName) to custom directory \(self.localDirectory)")
+            "Successfully write model \(modelName) to custom directory \(self.localDirectory)")
           results[modelName] = true
         } catch {
           logger.info("Failed to save model \(modelName): \(error.localizedDescription)")
